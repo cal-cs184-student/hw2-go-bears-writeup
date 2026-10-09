@@ -40,89 +40,132 @@
 
 		<figure>
 			<img src="assets/teapot.png" alt="Teapot" style="width:50%"/>
-			<figcaption>A beautiful teapot</figcaption>
 		</figure>
 
-		<!--
-		We've already added one heading per part, to make your write-up as navigable when grading. Please fit your write-up within these sections!
-		-->
-
 		<h2>Overview</h2>
-		In this assignment, we explored how 3D geometry can be represented, evaluated, and modified using different techniques. We implemented algorithms for working with Bézier curves and surfaces, as well as operations for editing and refining triangle meshes.
-		<br><br>
-		For Bézier geometry, we implemented de Casteljau's algorithm to calculate points on curves and extended the approach to surfaces in order to render a 3D teapot. For triangle meshes, we used the half-edge data structure to calculate vertex normals, flip and split edges, and implement Loop subdivision to create smoother surfaces.
-		<br><br>
-		One of the most interesting things we learned was how relatively simple algorithms can be combined to create complex 3D shapes and improve their appearance.
+		<p>In this assignment, we implemented algorithms for evaluating Bezier curves and surfaces, and operations for editing triangle meshes. We used de Casteljau's algorithm for the Bezier evaluations. For meshes, we computed area-weighted vertex normals, flipped and split edges, and implemented Loop subdivision.</p>
+		<p>The assignment helped us connect geometric formulas to the data structures used by a renderer. In particular, edge operations made it clear that every half-edge pointer must stay consistent when mesh connectivity changes.</p>
 
 		<h2>Section I: Bezier Curves and Surfaces</h2>
 
 		<h3>Part 1: Bezier curves with 1D de Casteljau subdivision</h3>
-		
-		<p>Here is an example 2x2 gridlike structure using an HTML table. Each <b>tr</b> is a row and each <b>td</b> is a column in that row. You might find this useful for framing and showing your result images in an organized fashion.</p>
+		<p>A Bezier curve is defined by its control points and a parameter <i>t</i> between 0 and 1. De Casteljau's algorithm evaluates the curve by repeatedly interpolating adjacent points. At each level, a new point is computed as <i>p'</i><sub>i</sub> = (1 - <i>t</i>)<i>p</i><sub>i</sub> + <i>t p</i><sub>i+1</sub>. Each level has one fewer point than the previous one. When only one point remains, it is the evaluated point on the curve.</p>
+		<p>We implemented one level in <code>BezierCurve::evaluateStep</code>. The function reads the member parameter <code>t</code>, loops over the adjacent pairs from index 0 to <code>points.size() - 2</code>, computes the interpolation above, and appends each result to a new vector. It returns that vector without modifying the input. Starting from six control points therefore gives five points after the first call, then four, three, two, and finally one point after five levels.</p>
+		<p>We chose the following six control points for <code>bzc/curve3.bzc</code>. The intermediate points change as <i>t</i> changes, while the first and last control points remain the endpoints of the curve.</p>
+		<pre>6
+0.150 0.200   0.250 0.800   0.400 0.900
+0.700 0.150   1.300 0.300   1.150 0.850</pre>
+		<p>We pressed <code>E</code> to advance one evaluation level at a time, from the original controls to the final point. We enabled <code>C</code> to draw the full curve alongside the levels. In the screenshots, white squares are the original control points, blue squares are the intermediate points, green is the curve, and red is the final evaluated point.</p>
 		<div style="display: flex; flex-direction: column; align-items: center;">
 			<table style="width: 100%; text-align: center; border-collapse: collapse;">
-			  <tr>
-				<td style="text-align: center;">
-				  <img src="assets/teapot.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
-				</td>
-				<td style="text-align: center;">
-				  <img src="assets/teapot.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
-				</td>
-			  </tr>
-			  <tr>
-				<td style="text-align: center;">
-				  <img src="assets/teapot.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
-				</td>
-				<td style="text-align: center;">
-				  <img src="assets/teapot.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
-				</td>
-			  </tr>
+				<tr>
+					<td style="width: 50%;"><img src="assets/part1_1.png" alt="Bezier curve, first de Casteljau level" style="width:100%"/><figcaption>Level 1: five points remain.</figcaption></td>
+					<td style="width: 50%;"><img src="assets/part1_2.png" alt="Bezier curve, second de Casteljau level" style="width:100%"/><figcaption>Level 2: four points remain.</figcaption></td>
+				</tr>
+				<tr>
+					<td><img src="assets/part1_3.png" alt="Bezier curve, third de Casteljau level" style="width:100%"/><figcaption>Level 3: three points remain.</figcaption></td>
+					<td><img src="assets/part1_4.png" alt="Bezier curve, fourth de Casteljau level" style="width:100%"/><figcaption>Level 4: two points remain.</figcaption></td>
+				</tr>
+				<tr>
+					<td><img src="assets/part1_5.png" alt="Final point of Bezier evaluation" style="width:100%"/><figcaption>Level 5: one point remains, the evaluated point at <i>t</i> = 0.5.</figcaption></td>
+					<td><img src="assets/part1_6.png" alt="Bezier curve at a different parameter" style="width:100%"/><figcaption>Same control points, different <i>t</i>: scrolling moves the evaluated point along the curve.</figcaption></td>
+				</tr>
 			</table>
 		</div>
+		<figure>
+			<img src="assets/part1_7.png" alt="Bezier curve after moving a control point and changing t" style="width:75%"/>
+			<figcaption>We dragged one of the original control points and scrolled to change <i>t</i>. The selected control point is green; the red evaluated point moves to the corresponding position on the changed curve.</figcaption>
+		</figure>
+		<p>We first used the wrong loop bound and tried to read past the last point. We also initially reversed the interpolation weights. The full curve still looked the same, but at <i>t</i> = 0 the result should equal the first control point. Checking this endpoint exposed the error.</p>
 
 		<h3>Part 2: Bezier surfaces with separable 1D de Casteljau</h3>
-		The de Casteljau algorithm for Bézier surfaces extends the 1D algorithm by applying it independently along both parameter directions, (u) and (v). A Bézier surface is defined by a grid of control points. First, we applied de Casteljau's algorithm to each row of control points using the parameter (u), resulting in one intermediate point for each row. We then applied the same algorithm to these intermediate points using the parameter (v), producing the final point on the Bézier surface.
-		<br><br>
-		We implemented this using three functions. evaluateStep performs one interpolation step between adjacent control points using ((1-t)P_i + tP_{i+1}). evaluate1D repeatedly applies this step until only one point remains, giving the Bézier curve evaluation for a given parameter. Finally, evaluate evaluates every row of the control-point grid at (u), stores the resulting points, and evaluates these points at (v). This allows the Bézier surface to be evaluated at any parameter pair ((u,v)).
-		
+		<p>A Bezier surface is the two-dimensional extension of a Bezier curve. A bicubic patch is defined by a 4x4 grid of 3D control points and two parameters, <i>u</i> and <i>v</i>. Like a curve, it interpolates its corner control points and is shaped by the interior points. The Utah teapot is made from multiple such patches.</p>
+		<p>We evaluate the surface one parameter direction at a time. First, de Casteljau's algorithm evaluates each row at <i>u</i>, leaving one point per row. We then treat those points as a new curve and evaluate it at <i>v</i>. The result is the point on the patch at (<i>u</i>, <i>v</i>).</p>
+		<p>We implemented this in three functions. <code>BezierPatch::evaluateStep</code> performs one interpolation level on 3D points. <code>evaluate1D</code> repeats that step until one point remains. <code>evaluate</code> evaluates each row at <i>u</i>, collects the results, and evaluates them at <i>v</i>. The supplied patch code samples this function over a grid and creates triangles for rendering.</p>
 		<figure>
-			<img src="assets/part_2.png" alt="Teapot" style="width:50%"/>
-			<figcaption>bez/teapot.bez evaluated with separable 1D de Casteljau</figcaption>
+			<img src="assets/part2_teapot.png" alt="Wireframe Utah teapot evaluated from Bezier patches" style="width:70%"/>
+			<figcaption><code>bez/teapot.bez</code> evaluated with our separable de Casteljau implementation.</figcaption>
 		</figure>
 
 		<h2>Section II: Triangle Meshes and Half-Edge Data Structure</h2>
 
 		<h3>Part 3: Area-weighted vertex normals</h3>
-		We implemented the area-weighted vertex normals by traversing all neighboring halfedges around the vertex and accumulating the normal contributions of the adjacent triangles. For each non-boundary triangle, we computed the cross product of two edge vectors from the current vertex. Since the magnitude of the cross product is proportional to the triangle's area, this naturally gives larger triangles a greater weight. After summing these contributions, we normalized the resulting vector to obtain the final unit vertex normal.
-		<br>
-		<br>
+		<p>Flat shading uses one normal per face, so the triangle boundaries are visible on a curved surface. For smoother Phong shading, we compute one normal at each vertex and interpolate it across the adjacent triangles.</p>
+		<p>In <code>Vertex::normal()</code>, we traverse the half-edges around the vertex using <code>h = h-&gt;twin()-&gt;next()</code>. For each real face, we take its two other vertices and compute the cross product of their position offsets from the current vertex. The magnitude of this cross product is twice the triangle's area, so adding the unnormalized cross products gives an area-weighted sum. We normalize the sum at the end and skip boundary faces.</p>
+		<p>The function is <code>const</code>, so the traversal uses <code>HalfedgeCIter</code>. We preserve the mesh's counter-clockwise face orientation when taking the cross product; reversing the order would point the normals inward. Pressing <code>Q</code> switches between flat shading and the vertex normals. The wireframe comparisons show that the geometry is unchanged: only the shading changes.</p>
 		<div style="display: flex; flex-direction: column; align-items: center;">
 			<table style="width: 100%; text-align: center; border-collapse: collapse;">
-			  <tr>
-				<td style="text-align: center;">
-				  <img src="assets/task_3.png" width="350px"/>
-				  <figcaption>Flat shading: one normal per face</figcaption>
-				</td>
-				<td style="text-align: center;">
-				  <img src="assets/task_3_Q.png" width="350px"/>
-				  <figcaption>Phong shading with area-weighted vertex normals</figcaption>
-				</td>
-			  </tr>
+				<tr>
+					<td style="width: 50%;"><img src="assets/part3_flat.png" alt="Flat-shaded teapot" style="width:100%"/><figcaption>Flat shading: one normal per face.</figcaption></td>
+					<td style="width: 50%;"><img src="assets/part3_smooth.png" alt="Smooth-shaded teapot with vertex normals" style="width:100%"/><figcaption>Phong shading using area-weighted vertex normals.</figcaption></td>
+				</tr>
+				<tr>
+					<td><img src="assets/part3_flat_wire.png" alt="Flat-shaded teapot with wireframe" style="width:100%"/><figcaption>Flat shading with wireframe.</figcaption></td>
+					<td><img src="assets/part3_smooth_wire.png" alt="Smooth-shaded teapot with wireframe" style="width:100%"/><figcaption>Vertex normals with the same wireframe.</figcaption></td>
+				</tr>
 			</table>
 		</div>
 
 		<h3>Part 4: Edge flip</h3>
+		<p>An edge flip changes the diagonal inside the quadrilateral formed by two adjacent triangles. For triangles (<i>a</i>, <i>b</i>, <i>c</i>) and (<i>c</i>, <i>b</i>, <i>d</i>) sharing edge (<i>b</i>, <i>c</i>), the operation replaces that edge with (<i>a</i>, <i>d</i>). It is useful for changing mesh connectivity without moving vertices or changing the number of faces. In Loop subdivision, flips are also used after splitting to produce the required triangle pattern.</p>
+		<p>In <code>HalfedgeMesh::flipEdge</code>, we first return without changes if the edge is on a boundary. For an interior edge, we collect both adjacent triangle cycles before editing anything: six half-edges, their four outer twins, the four vertices, four surrounding edges, and two faces. This is important because following <code>next()</code> after rewiring has started could traverse a partly modified cycle.</p>
+		<p>We then use <code>setNeighbors</code> to reset the six half-edges in the two new triangles. The two half-edges belonging to the flipped edge now start at <i>a</i> and <i>d</i>. The other four keep their original twin, vertex, and edge, but some receive a new <code>next</code> or face. We also reset the <code>halfedge()</code> pointer for each affected vertex, edge, and face so that it still points to an element belonging to it. The four outer half-edges do not need rewiring. This is a constant-time local operation.</p>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+				<tr>
+					<td style="width: 50%;"><img src="assets/part4_teapot_before.png" alt="Teapot mesh before edge flips" style="width:100%"/><figcaption>Teapot before local edge flips.</figcaption></td>
+					<td style="width: 50%;"><img src="assets/part4_teapot_after.png" alt="Teapot mesh after edge flips" style="width:100%"/><figcaption>After several flips in the body.</figcaption></td>
+				</tr>
+				<tr>
+					<td><img src="assets/part4_cube_before.png" alt="Cube before edge flips" style="width:100%"/><figcaption>Cube before flipping face diagonals.</figcaption></td>
+					<td><img src="assets/part4_cube_after.png" alt="Cube after edge flips" style="width:100%"/><figcaption>Cube after the flips; the geometry is unchanged.</figcaption></td>
+				</tr>
+			</table>
+		</div>
+		<p>The debugging took a few attempts. At first, we treated an <code>Edge</code> as if it had <code>next()</code>, <code>twin()</code>, and <code>face()</code> pointers; those belong to a half-edge, so we had to start from <code>e0-&gt;halfedge()</code>. We also passed a half-edge where <code>setNeighbors</code> expects an edge and returned an empty iterator instead of the flipped edge.</p>
+		<p>The main connectivity bug came from trying to update only the pointers that seemed to change. Some vertex and face pointers still referenced half-edges that no longer started at that vertex or belonged to that face. We drew the two triangles, labelled the half-edges <code>h0</code> through <code>h9</code>, and wrote the new cycles down before coding. This also helped us catch a later mix-up between <code>h2</code> and <code>h4</code>. We then reset every inner half-edge and each affected element's <code>halfedge()</code> pointer. Checking reciprocal twin pairs and closed face cycles made the errors much easier to find. Repeated flips kept the mesh closed, and flipping an edge twice restored its original diagonal.</p>
 
 		<h3>Part 5: Edge split</h3>
+		<p>An edge split adds a vertex at the midpoint of an interior edge and connects it to the two opposite vertices of the adjacent triangles. The two triangles become four. Splitting increases the mesh resolution while keeping the surface connected. It is also a building block for Loop subdivision, which splits every original edge before flipping selected new edges.</p>
+		<p>In <code>HalfedgeMesh::splitEdge</code>, we first reject a boundary edge; this implementation does not support boundary splits. For an interior edge, we collect the same two-triangle neighborhood used by the flip before changing any pointers. We create one vertex, three edges, two faces, and six half-edges. The new vertex is placed at the average of the two original endpoint positions.</p>
+		<p>We reuse the original edge for one half of the split edge and create a new edge for the other half. Two additional edges connect the midpoint to the opposite vertices. The original faces are reused for two of the four triangles, and two new faces are added. We then assign the <code>next</code>, <code>twin</code>, <code>vertex</code>, <code>edge</code>, and <code>face</code> pointers for all twelve half-edges, and update the <code>halfedge()</code> pointers on the five vertices, eight edges, and four faces. The midpoint's half-edge is set to one of the two halves of the original edge, as required. Since only this fixed neighborhood is changed, the operation takes constant work.</p>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+				<tr>
+					<td style="width: 50%;"><img src="assets/part5_cube_before.png" alt="Cube face before edge split" style="width:100%"/><figcaption>Cube face before a split.</figcaption></td>
+					<td style="width: 50%;"><img src="assets/part5_cube_split1.png" alt="Cube face after one edge split" style="width:100%"/><figcaption>After splitting the diagonal once.</figcaption></td>
+				</tr>
+				<tr>
+					<td><img src="assets/part5_cube_split3.png" alt="Cube face after three edge splits" style="width:100%"/><figcaption>After further splits along the diagonal.</figcaption></td>
+					<td><img src="assets/part5_cube_split_flip.png" alt="Cube face after edge splits and flips" style="width:100%"/><figcaption>A combination of splits and flips.</figcaption></td>
+				</tr>
+			</table>
+		</div>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+				<tr>
+					<td style="width: 50%;"><img src="assets/part5_teapot_before.png" alt="Teapot before edge splits" style="width:100%"/><figcaption>Teapot before local splits.</figcaption></td>
+					<td style="width: 50%;"><img src="assets/part5_teapot_after.png" alt="Teapot after edge splits" style="width:100%"/><figcaption>Teapot after edge splits.</figcaption></td>
+				</tr>
+				<tr>
+					<td><img src="assets/part5_teapot_combo.png" alt="Teapot after combined edge splits and flips" style="width:100%"/><figcaption>Several edge splits and flips in one region.</figcaption></td>
+					<td><img src="assets/part5_teapot_combo_shaded.png" alt="Shaded teapot after edge operations" style="width:100%"/><figcaption>The same edited area with wireframe hidden.</figcaption></td>
+				</tr>
+			</table>
+		</div>
+		<p>The split was harder to debug than the flip because it creates more elements and more pointers. One early mistake was copying the half-edge collection from the flip while changing the meaning of <code>h4</code> and <code>h5</code> in our drawing. The pointer assignments looked consistent on paper, but the names referred to different half-edges in the code. We returned to the same labels used for the flip so both operations could be checked against one diagram.</p>
+		<p>After fixing the labels, we found that <code>h0</code>'s <code>next</code> and <code>twin</code> had been confused, and the twins for two surrounding half-edges were reversed. We checked that every twin points back to its partner and that following <code>next</code> around each triangle returns to its first half-edge. The viewer tests then included repeated splits and combinations of splits and flips on nearby edges; the resulting mesh remained connected and had no holes. The <code>isNew</code> flag also needed care: it marks the new edges across the old triangles, not every edge created by the function. The two halves along the original edge must not be flipped during Loop subdivision.</p>
+		<p>Boundary-edge splitting is not implemented, so there are no boundary-split results to show.</p>
 
 		<h3>Part 6: Loop subdivision for mesh upsampling</h3>
+		<p>Loop subdivision first splits each triangle into four, then updates vertex positions. In <code>MeshResampler::upsample</code>, we compute all new positions from the original mesh before changing it. For an interior edge with endpoints <i>A</i> and <i>B</i> and opposite vertices <i>C</i> and <i>D</i>, the new vertex is <span>3/8(A + B) + 1/8(C + D)</span>. An old vertex of degree <i>n</i> is updated using <span>(1 - nβ)V + βΣV<sub>i</sub></span>, with β = 3/16 for degree 3 and β = 3/(8<i>n</i>) otherwise.</p>
+		<p>We store the original edges, split each original interior edge once, then flip new edges that connect an old vertex to a new one. Finally, we apply the positions saved earlier. This keeps the position calculations based on the original mesh and avoids splitting newly created edges in the same iteration.</p>
+		<p>The code includes the Loop position rule for boundary vertices, but boundary-edge splits are skipped, so boundary meshes are not fully supported.</p>
+		<p style="color: red;"><strong>INSERT IMAGE:</strong> Show <code>dae/cube.dae</code> before subdivision and after several presses of <code>L</code>. Add our observation about how its sharp corners and edges change.</p>
+		<p style="color: red;"><strong>INSERT IMAGE:</strong> Show the cube after preprocessing with edge flips and splits, then after the same number of subdivision rounds. Add our comparison and explain whether preprocessing made the result more symmetric.</p>
 
 		<h2>(Optional) Section III: Potential Extra Credit - Art Competition: Model something Creative</h2>
-		///
+		<p>We did not create a custom model for the optional art competition.</p>
 		</div>
 	</body>
 </html>
